@@ -29,9 +29,9 @@ export default function JogoVerbos() {
 
   // Filtrar verbos por nível
   const getVerbosPorNivel = () => {
-    if (nivelSelecionado === 'fácil') return verbos.slice(0, 30);
-    if (nivelSelecionado === 'médio') return verbos.slice(0, 65);
-    if (nivelSelecionado === 'difícil') return verbos.slice(0, 100);
+    if (nivelSelecionado === 'fácil') return verbos.slice(0, 38);
+    if (nivelSelecionado === 'médio') return verbos.slice(0, 91);
+    if (nivelSelecionado === 'difícil') return verbos.slice(0, 114);
     return verbos;
   };
 

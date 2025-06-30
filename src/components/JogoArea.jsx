@@ -1,5 +1,6 @@
 // JogoArea.jsx
-import { Button, Card, CardContent } from './UIComponents'; // ou onde você salvou os básicos
+import React, { useRef, useEffect } from 'react';
+import { Button, Card, CardContent } from './UIComponents';
 import banner from '../assets/banner_ingles.png';
 
 export function JogoArea({
@@ -18,6 +19,24 @@ export function JogoArea({
   verbosSorteados,
   totalPalavras,
 }) {
+  // Refs para input e botão
+  const inputRef = useRef(null);
+  const nextButtonRef = useRef(null);
+
+  // Foca no botão 'Próxima' quando ele aparece
+  useEffect(() => {
+    if (mostrarProxima) {
+      nextButtonRef.current?.focus();
+    }
+  }, [mostrarProxima]);
+
+  // Foca no input sempre que um novo verbo é sorteado
+  useEffect(() => {
+    if (verboAtual && !mostrarProxima) {
+      inputRef.current?.focus();
+    }
+  }, [verboAtual, mostrarProxima]);
+
   return (
     <Card>
       <CardContent>
@@ -26,6 +45,7 @@ export function JogoArea({
         <h2 className="titulo">Tradução: {verboAtual?.pt}</h2>
         <p className="tempo">Digite no tempo: <strong>{tempoAtual}</strong></p>
         <input
+          ref={inputRef}
           type="text"
           value={resposta}
           onChange={(e) => setResposta(e.target.value)}
@@ -41,11 +61,11 @@ export function JogoArea({
           {!mostrarProxima ? (
             <Button onClick={verificarResposta}>Verificar</Button>
           ) : (
-            <Button onClick={proximaPalavra}>Próxima</Button>
+            <Button ref={nextButtonRef} onClick={proximaPalavra}>Próxima</Button>
           )}
           <Button onClick={reiniciarJogo} className="reiniciar-button">Reiniciar</Button>
-          <Button 
-            onClick={tocarAudio} 
+          <Button
+            onClick={tocarAudio}
             className={`audio-button ${!audioDisponivel ? 'disabled' : ''}`}
             disabled={!audioDisponivel}
           >
