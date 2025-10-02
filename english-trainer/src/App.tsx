@@ -309,8 +309,12 @@ const PhrasalVerbGameSetup = ({ onStartGame }: { onStartGame: (difficulty: Diffi
 );
 
 // Função genérica para chamar a API do Gemini
-const callGeminiAPI = async (prompt: string): Promise<string> => {
-    const apiKey = ""; 
+const callGeminiAPI = async (prompt: string, apiKey: string | undefined): Promise<string> => {
+    if (!apiKey) {
+        console.error("API Key is missing.");
+        return "Chave de API não configurada.";
+    }
+    
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
     const systemPrompt = `You are an English teacher. Your goal is to provide a single, simple, and easy-to-understand example sentence for a beginner student. The sentence must use the provided word or phrasal verb. Respond only with the sentence itself, without any introductory text, quotes, or explanations.`;
     
@@ -366,30 +370,38 @@ const GameCompletion = ({ score, totalQuestions, onRestart, onBackToHub }: { sco
 
 
 const VerbGame = ({ verbs, onBackToHub }: { verbs: Verb[], onBackToHub: () => void }) => {
+    const [questions, setQuestions] = useState<{ verb: Verb; tense: Tense }[]>([]);
     const [questionIndex, setQuestionIndex] = useState(0);
     const [score, setScore] = useState(0);
     const [isGameComplete, setIsGameComplete] = useState(false);
-    
-    const allQuestions = useMemo(() => {
-        const questions: { verb: Verb; tense: Tense }[] = [];
-        verbs.forEach(verb => {
-            questions.push({ verb, tense: 'presente' });
-            questions.push({ verb, tense: 'passado' });
-            questions.push({ verb, tense: 'particípio' });
-        });
-        return questions.sort(() => Math.random() - 0.5);
-    }, [verbs]);
-
-    const [currentQuestion, setCurrentQuestion] = useState(allQuestions[0]);
     const [userInput, setUserInput] = useState('');
     const [feedback, setFeedback] = useState<'correct' | 'incorrect' | ''>('');
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [geminiExample, setGeminiExample] = useState('');
     const [isLoadingExample, setIsLoadingExample] = useState(false);
 
+    // Função para gerar e embaralhar as perguntas
+    const shuffleQuestions = () => {
+        const allQuestions: { verb: Verb; tense: Tense }[] = [];
+        verbs.forEach(verb => {
+            allQuestions.push({ verb, tense: 'presente' });
+            allQuestions.push({ verb, tense: 'passado' });
+            allQuestions.push({ verb, tense: 'particípio' });
+        });
+        return allQuestions.sort(() => Math.random() - 0.5);
+    };
+
+    // Gera as perguntas quando o componente é montado pela primeira vez
+    useState(() => {
+        setQuestions(shuffleQuestions());
+    });
+
+    const currentQuestion = questions[questionIndex];
+
     const fetchExample = async (word: string) => {
         setIsLoadingExample(true);
-        const example = await callGeminiAPI(`Word: "${word}"`);
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        const example = await callGeminiAPI(`Word: "${word}"`, apiKey);
         setGeminiExample(example);
         setIsLoadingExample(false);
     };
@@ -409,10 +421,9 @@ const VerbGame = ({ verbs, onBackToHub }: { verbs: Verb[], onBackToHub: () => vo
     };
 
     const handleNext = () => {
-        if (questionIndex < allQuestions.length - 1) {
+        if (questionIndex < questions.length - 1) {
             const nextIndex = questionIndex + 1;
             setQuestionIndex(nextIndex);
-            setCurrentQuestion(allQuestions[nextIndex]);
             setUserInput('');
             setFeedback('');
             setIsSubmitted(false);
@@ -423,12 +434,10 @@ const VerbGame = ({ verbs, onBackToHub }: { verbs: Verb[], onBackToHub: () => vo
     };
 
     const restartGame = () => {
-        const newShuffled = [...allQuestions].sort(() => Math.random() - 0.5);
-        
+        setQuestions(shuffleQuestions()); // <-- AQUI ESTÁ A CORREÇÃO PRINCIPAL
         setQuestionIndex(0);
         setScore(0);
         setIsGameComplete(false);
-        setCurrentQuestion(newShuffled[0]);
         setUserInput('');
         setFeedback('');
         setIsSubmitted(false);
@@ -436,18 +445,22 @@ const VerbGame = ({ verbs, onBackToHub }: { verbs: Verb[], onBackToHub: () => vo
     };
     
     if (isGameComplete) {
-        return <GameCompletion score={score} totalQuestions={allQuestions.length} onRestart={restartGame} onBackToHub={onBackToHub} />;
+        return <GameCompletion score={score} totalQuestions={questions.length} onRestart={restartGame} onBackToHub={onBackToHub} />;
+    }
+
+    if (!currentQuestion) {
+        return <Loader />;
     }
 
     const tenseMap: Record<Tense, string> = { presente: "Presente", passado: "Passado", particípio: "Particípio" };
-    const progress = allQuestions.length > 0 ? ((questionIndex + 1) / allQuestions.length) * 100 : 0;
+    const progress = questions.length > 0 ? ((questionIndex + 1) / questions.length) * 100 : 0;
 
     return (
         <div className="w-full max-w-md mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg">
             <div className="mb-8">
                 <div className="flex justify-between items-center mb-2 text-gray-600">
                     <span className="font-bold text-lg text-blue-600">Pontos: {score}</span>
-                    <span className="text-sm font-medium">{questionIndex + 1} / {allQuestions.length}</span>
+                    <span className="text-sm font-medium">{questionIndex + 1} / {questions.length}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                     <div className="bg-green-500 h-2.5 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
@@ -495,28 +508,36 @@ const normalizeString = (str: string): string => {
 };
 
 const PhrasalVerbGame = ({ phrasalVerbs, onBackToHub }: { phrasalVerbs: PhrasalVerb[], onBackToHub: () => void }) => {
+    const [questions, setQuestions] = useState<{ item: PhrasalVerb; type: 'phrasal' | 'meaning' }[]>([]);
     const [questionIndex, setQuestionIndex] = useState(0);
     const [score, setScore] = useState(0);
     const [isGameComplete, setIsGameComplete] = useState(false);
-
-    const allQuestions = useMemo(() => {
-        const questions: { item: PhrasalVerb; type: 'phrasal' | 'meaning' }[] = [];
-        phrasalVerbs.forEach(item => {
-            questions.push({ item, type: Math.random() > 0.5 ? 'phrasal' : 'meaning' });
-        });
-        return questions.sort(() => Math.random() - 0.5);
-    }, [phrasalVerbs]);
-
-    const [currentQuestion, setCurrentQuestion] = useState(allQuestions[0]);
     const [userInput, setUserInput] = useState('');
     const [feedback, setFeedback] = useState<'correct' | 'incorrect' | ''>('');
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [geminiExample, setGeminiExample] = useState('');
     const [isLoadingExample, setIsLoadingExample] = useState(false);
 
+    // Função para gerar e embaralhar as perguntas
+    const shuffleQuestions = () => {
+        const allQuestions: { item: PhrasalVerb; type: 'phrasal' | 'meaning' }[] = [];
+        phrasalVerbs.forEach(item => {
+            allQuestions.push({ item, type: Math.random() > 0.5 ? 'phrasal' : 'meaning' });
+        });
+        return allQuestions.sort(() => Math.random() - 0.5);
+    };
+
+    // Gera as perguntas quando o componente é montado pela primeira vez
+    useState(() => {
+        setQuestions(shuffleQuestions());
+    });
+
+    const currentQuestion = questions[questionIndex];
+
     const fetchExample = async (phrasal: string) => {
         setIsLoadingExample(true);
-        const example = await callGeminiAPI(`Phrasal Verb: "${phrasal}"`);
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        const example = await callGeminiAPI(`Phrasal Verb: "${phrasal}"`, apiKey);
         setGeminiExample(example);
         setIsLoadingExample(false);
     };
@@ -536,10 +557,9 @@ const PhrasalVerbGame = ({ phrasalVerbs, onBackToHub }: { phrasalVerbs: PhrasalV
     };
 
     const handleNext = () => {
-        if (questionIndex < allQuestions.length - 1) {
+        if (questionIndex < questions.length - 1) {
             const nextIndex = questionIndex + 1;
             setQuestionIndex(nextIndex);
-            setCurrentQuestion(allQuestions[nextIndex]);
             setUserInput('');
             setFeedback('');
             setIsSubmitted(false);
@@ -550,12 +570,10 @@ const PhrasalVerbGame = ({ phrasalVerbs, onBackToHub }: { phrasalVerbs: PhrasalV
     };
 
     const restartGame = () => {
-        const newShuffled = [...allQuestions].sort(() => Math.random() - 0.5);
-        
+        setQuestions(shuffleQuestions()); // <-- AQUI ESTÁ A CORREÇÃO PRINCIPAL
         setQuestionIndex(0);
         setScore(0);
         setIsGameComplete(false);
-        setCurrentQuestion(newShuffled[0]);
         setUserInput('');
         setFeedback('');
         setIsSubmitted(false);
@@ -563,21 +581,22 @@ const PhrasalVerbGame = ({ phrasalVerbs, onBackToHub }: { phrasalVerbs: PhrasalV
     };
 
     if (isGameComplete) {
-        return <GameCompletion score={score} totalQuestions={allQuestions.length} onRestart={restartGame} onBackToHub={onBackToHub} />;
+        return <GameCompletion score={score} totalQuestions={questions.length} onRestart={restartGame} onBackToHub={onBackToHub} />;
     }
 
     if (!currentQuestion) return <Loader />;
 
-    const progress = allQuestions.length > 0 ? ((questionIndex + 1) / allQuestions.length) * 100 : 0;
+     const progress = questions.length > 0 ? ((questionIndex + 1) / questions.length) * 100 : 0;
     const questionText = currentQuestion.type === 'phrasal' ? currentQuestion.item.phrasal : currentQuestion.item.meaning;
     const promptText = currentQuestion.type === 'phrasal' ? 'Qual o significado de' : 'Qual o phrasal verb para';
+
 
     return (
         <div className="w-full max-w-md mx-auto bg-white p-6 md:p-8 rounded-xl shadow-lg">
             <div className="mb-8">
                 <div className="flex justify-between items-center mb-2 text-gray-600">
                     <span className="font-bold text-lg text-purple-600">Pontos: {score}</span>
-                    <span className="text-sm font-medium">{questionIndex + 1} / {allQuestions.length}</span>
+                    <span className="text-sm font-medium">{questionIndex + 1} / {questions.length}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                     <div className="bg-green-500 h-2.5 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
